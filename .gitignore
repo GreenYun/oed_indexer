@@ -1,0 +1,12 @@
+# exclude executables
+*
+build/*
+!*.*
+
+# exclude outputs
+*.csv
+*.log
+
+# include for GitHub
+!LICENCE
+!README*
