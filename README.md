@@ -11,7 +11,7 @@ There will be no headers if output is written to stdout (default).
 
 Please do not abuse this program. This program is for educational purposes only.
 
-2023 Upgrage
+2023 Upgrade
 ------------
 
 1. Build requirements boosted to Go 1.20.
