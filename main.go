@@ -1,4 +1,4 @@
-// Copyright 2021 GreenYun Organization. All rights reserved.
+// Copyright 2021 - 2023 GreenYun Organization. All rights reserved.
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 
@@ -48,7 +48,7 @@ func next() int {
 
 func init() {
 	// Ctrl-c capturing
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
@@ -58,8 +58,8 @@ func init() {
 
 		// The second time SIGTERM received
 		<-c
-		fmt.Fprint(os.Stderr, "\r")
-		log.Fatal("user interrupted")
+		fmt.Fprint(os.Stderr, "\033[2K\r")
+		log.Fatal("user interrupted, output may be corrupted")
 	}()
 
 	// Initialize usage string
@@ -136,18 +136,19 @@ func main() {
 
 			if progress {
 				nsec := time.Now().UnixNano()
-				ratio := i / f
+				ratio := i / f * 100.0
+				progressGraph := `|/-\`[(nsec>>29)%4]
 
 				if progressFancy { // Fancy output
 					elapsed := nsec - start
 					remaining := int64((f-i)/(i/float64(elapsed))) / 1e9
-					fmt.Fprintf(os.Stderr, "\r%c %.2f%% done, elapsed %v, eta %-12v\r",
-						`|/-\`[(nsec>>28)%4],
-						ratio*100.0,
+					fmt.Fprintf(os.Stderr, "\r[%c] %.2f%% done, elapsed %v, eta %v\033[K",
+						progressGraph,
+						ratio,
 						time.Duration(elapsed/1e9)*time.Second,
 						time.Duration(remaining)*time.Second)
 				} else {
-					fmt.Fprintf(os.Stderr, "\r%c %.2f%% done\r", `|/-\`[(nsec>>28)%4], ratio*100.0)
+					fmt.Fprintf(os.Stderr, "\r[%c] %.2f%% done\033[K", progressGraph, ratio)
 				}
 
 			}
@@ -157,6 +158,8 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(threads)
 
+	client := &http.Client{}
+
 	// Main multi-task parsing function
 	for i := 1; i <= threads; i++ {
 		go func() {
@@ -165,7 +168,14 @@ func main() {
 
 			for i := next(); i > 0; i = next() {
 				url := "https://www.oed.com/oed2/" + strconv.FormatInt(int64(i), 10)
-				resp, err := http.Get(url)
+				req, err := http.NewRequest("", url, nil)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+
+				req.Header.Add("User-Agent", "Mozilla/5.0 Chrome/114 Safari/514 FireFox/1919")
+				resp, err := client.Do(req)
 				if err != nil {
 					log.Println(err)
 					continue
@@ -203,6 +213,8 @@ func main() {
 	}
 
 	wg.Wait()
+
+	fmt.Fprintf(os.Stderr, "\033[2K\r")
 
 	if toFile {
 		if progress || verbose {
